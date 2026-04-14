@@ -72,7 +72,7 @@ def _form_vectra_special_agent() -> Dictionary:
                     ),
                     prefill=DefaultValue(False),
                 ),
-                required=False,
+                required=True,
             ),
         },
     )
