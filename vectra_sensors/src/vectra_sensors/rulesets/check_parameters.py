@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Checkmk 2.3 Rulesets API
-Check-Parameter-Regel für Vectra Sensor Health
+Check parameter rule for Vectra Sensor Health
 """
 
 from cmk.rulesets.v1 import Help, Title
@@ -21,10 +21,10 @@ def _parameter_form_vectra_sensors() -> Dictionary:
         elements={
             "max_last_seen_warn": DictElement(
                 parameter_form=TimeSpan(
-                    title=Title("Heartbeat-Alter WARN"),
+                    title=Title("Heartbeat age WARN"),
                     help_text=Help(
-                        "WARNING, wenn der letzte Heartbeat älter als dieser Wert ist. "
-                        "Standard: 1 Stunde."
+                        "WARNING if the last heartbeat is older than this value. "
+                        "Default: 1 hour."
                     ),
                     displayed_magnitudes=[
                         TimeMagnitude.MINUTE,
@@ -37,10 +37,10 @@ def _parameter_form_vectra_sensors() -> Dictionary:
             ),
             "max_last_seen_crit": DictElement(
                 parameter_form=TimeSpan(
-                    title=Title("Heartbeat-Alter CRIT"),
+                    title=Title("Heartbeat age CRIT"),
                     help_text=Help(
-                        "CRITICAL, wenn der letzte Heartbeat älter als dieser Wert ist. "
-                        "Standard: 24 Stunden."
+                        "CRITICAL if the last heartbeat is older than this value. "
+                        "Default: 24 hours."
                     ),
                     displayed_magnitudes=[
                         TimeMagnitude.MINUTE,
@@ -57,7 +57,7 @@ def _parameter_form_vectra_sensors() -> Dictionary:
 
 rule_spec_vectra_sensors = CheckParameters(
     name="vectra_sensors",
-    title=Title("Vectra NDR – Sensor Health Schwellwerte"),
+    title=Title("Vectra NDR – Sensor Health Thresholds"),
     topic=Topic.NETWORKING,
     parameter_form=_parameter_form_vectra_sensors,
     condition=HostAndItemCondition(

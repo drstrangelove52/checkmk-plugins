@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 Checkmk 2.3 Check Plugin: Vectra Sensor Health
-Verwendet die neue cmk.agent_based.v2 API
+Uses the cmk.agent_based.v2 API
 
-Da Vectra-Sensoren gehärtet sind, werden alle Statusinformationen
-ausschliesslich über die Vectra Brain REST API abgerufen.
+All sensor data is fetched exclusively via the Vectra Brain REST API,
+as Vectra sensors are hardened and do not run a Checkmk agent.
 """
 
 from collections.abc import Mapping
@@ -27,8 +27,17 @@ from cmk.agent_based.v2 import (
 
 
 # ──────────────────────────────────────────────────────────────
-# Status-Mapping
-# Bekannte Vectra-Sensor-Zustände und deren Checkmk-Zuordnung
+# Status mapping
+# Known Vectra sensor states and their Checkmk equivalents.
+#
+# Confirmed states (Vectra NDR API v2.5):
+#   "paired"       – sensor is active and reporting normally  → OK
+#   "degraded"     – sensor is reachable but has issues       → WARN
+#   "offline"      – sensor is not reachable                  → CRIT
+#   "disconnected" – sensor lost connection to Brain          → CRIT
+#
+# Any unknown state (e.g. "initializing", "updating") falls back to WARN
+# so that transient states do not trigger false alarms.
 # ──────────────────────────────────────────────────────────────
 
 _STATUS_STATE: dict[str, State] = {
@@ -38,9 +47,10 @@ _STATUS_STATE: dict[str, State] = {
     "disconnected": State.CRIT,
 }
 
+
 def _sensor_check_state(status: str) -> State:
-    """Gibt den Checkmk-Status für einen Sensor-Zustand zurück.
-    Unbekannte Zustände werden als WARN behandelt."""
+    """Returns the Checkmk state for a given sensor status.
+    Unknown statuses fall back to WARN."""
     return _STATUS_STATE.get(status.lower(), State.WARN)
 
 
@@ -68,7 +78,7 @@ agent_section_vectra_sensors = AgentSection(
 
 
 # ──────────────────────────────────────────────────────────────
-# Hilfsfunktionen
+# Helper functions
 # ──────────────────────────────────────────────────────────────
 
 def _last_seen_age_seconds(last_seen: str) -> float | None:
@@ -81,12 +91,12 @@ def _last_seen_age_seconds(last_seen: str) -> float | None:
 
 def _format_age(seconds: float) -> str:
     if seconds < 120:
-        return f"{seconds:.0f} Sek."
+        return f"{seconds:.0f} sec."
     if seconds < 7200:
-        return f"{seconds / 60:.0f} Min."
+        return f"{seconds / 60:.0f} min."
     if seconds < 172800:
-        return f"{seconds / 3600:.1f} Std."
-    return f"{seconds / 86400:.1f} Tage"
+        return f"{seconds / 3600:.1f} h"
+    return f"{seconds / 86400:.1f} days"
 
 
 # ──────────────────────────────────────────────────────────────
@@ -120,7 +130,7 @@ def check_vectra_sensors(
     if sensor is None:
         yield Result(
             state=State.UNKNOWN,
-            summary=f"Sensor '{item}' nicht in API-Antwort gefunden",
+            summary=f"Sensor '{item}' not found in API response",
         )
         return
 
@@ -134,7 +144,7 @@ def check_vectra_sensors(
 
     cmk_state = _sensor_check_state(status)
 
-    # Nicht-paired Zustände: kein Heartbeat-Check mehr nötig
+    # Non-paired states: no heartbeat check required
     if cmk_state != State.OK:
         yield Result(
             state=cmk_state,
@@ -144,7 +154,7 @@ def check_vectra_sensors(
                 f"  IP:        {ip}\n"
                 f"  Serial:    {serial}\n"
                 f"  Version:   {version}\n"
-                f"  Standort:  {location}\n"
+                f"  Location:  {location}\n"
                 f"  LUID:      {luid}"
             ),
         )
@@ -153,7 +163,7 @@ def check_vectra_sensors(
     if not last_seen:
         yield Result(
             state=State.UNKNOWN,
-            summary=f"Gepaart, aber kein last_seen-Timestamp | IP: {ip}",
+            summary=f"Paired, but no last_seen timestamp | IP: {ip}",
         )
         return
 
@@ -161,7 +171,7 @@ def check_vectra_sensors(
     if age is None:
         yield Result(
             state=State.UNKNOWN,
-            summary=f"last_seen konnte nicht geparst werden: '{last_seen}'",
+            summary=f"Cannot parse last_seen timestamp: '{last_seen}'",
         )
         return
 
@@ -177,16 +187,16 @@ def check_vectra_sensors(
     yield Result(
         state=hb_state,
         summary=(
-            f"Paired | Heartbeat vor {age_str} | "
+            f"Paired | Last seen {age_str} ago | "
             f"IP: {ip} | Version: {version}"
         ),
         details=(
             f"  Status:    {status}\n"
-            f"  Last Seen: {last_seen} (vor {age_str})\n"
+            f"  Last seen: {last_seen} ({age_str} ago)\n"
             f"  IP:        {ip}\n"
             f"  Serial:    {serial}\n"
             f"  Version:   {version}\n"
-            f"  Standort:  {location}\n"
+            f"  Location:  {location}\n"
             f"  LUID:      {luid}"
         ),
     )
@@ -195,7 +205,7 @@ def check_vectra_sensors(
         age / 60,
         metric_name="vectra_sensor_last_seen_minutes",
         levels_upper=(warn_age / 60, crit_age / 60),
-        label="Heartbeat-Alter",
+        label="Heartbeat age",
         render_func=lambda v: f"{v:.1f} min",
         notice_only=True,
     )

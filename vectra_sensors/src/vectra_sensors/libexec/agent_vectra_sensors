@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Vectra Special Agent  –  agent_vectra_sensors
-Holt Sensor-Healthdaten vom Vectra Brain REST API
-und schreibt sie als Checkmk Agent-Section in stdout.
+Fetches sensor health data from the Vectra Brain REST API
+and writes it as a Checkmk agent section to stdout.
 
-Aufruf durch Checkmk:
-  agent_vectra_sensors --brain <host> --token <token> [--no-verify-ssl]
+Usage by Checkmk:
+  agent_vectra_sensors --brain <host> --token <token> [--timeout <sec>] [--no-verify-ssl]
 """
 
 import sys
@@ -17,7 +17,7 @@ import urllib.error
 import ssl
 
 
-def get_sensors(brain_host: str, api_token: str, verify_ssl: bool = True) -> list[dict]:
+def get_sensors(brain_host: str, api_token: str, verify_ssl: bool = True, timeout: int = 30) -> list[dict]:
     url = f"https://{brain_host}/api/v2.5/health/sensors"
     req = urllib.request.Request(
         url,
@@ -31,9 +31,7 @@ def get_sensors(brain_host: str, api_token: str, verify_ssl: bool = True) -> lis
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
 
-    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"HTTP {resp.status} von Brain erhalten")
+    with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
     sensors = data.get("sensors", data if isinstance(data, list) else [])
@@ -44,9 +42,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Vectra Special Agent – Sensor Health via Brain API",
     )
-    parser.add_argument("--brain",          required=True,  metavar="HOST",  help="Brain Hostname/IP")
-    parser.add_argument("--token",          required=True,  metavar="TOKEN", help="API Token")
-    parser.add_argument("--no-verify-ssl",  action="store_true",             help="SSL-Prüfung deaktivieren")
+    parser.add_argument("--brain",         required=True,  metavar="HOST",    help="Brain hostname or IP")
+    parser.add_argument("--token",         required=True,  metavar="TOKEN",   help="API token")
+    parser.add_argument("--timeout",       type=int, default=30, metavar="SEC", help="Request timeout in seconds (default: 30)")
+    parser.add_argument("--no-verify-ssl", action="store_true",                help="Disable SSL certificate verification")
     args = parser.parse_args()
 
     try:
@@ -54,31 +53,32 @@ def main() -> int:
             brain_host=args.brain,
             api_token=args.token,
             verify_ssl=not args.no_verify_ssl,
+            timeout=args.timeout,
         )
     except urllib.error.HTTPError as e:
         sys.stderr.write(
-            f"HTTP-Fehler {e.code} beim Abruf von Brain '{args.brain}': {e.reason}\n"
+            f"HTTP error {e.code} fetching from Brain '{args.brain}': {e.reason}\n"
         )
         if e.code == 401:
-            sys.stderr.write("  → API-Token ungültig oder abgelaufen.\n")
+            sys.stderr.write("  → API token is invalid or expired.\n")
         elif e.code == 403:
-            sys.stderr.write("  → Fehlende Berechtigung (Detect view health erforderlich).\n")
+            sys.stderr.write("  → Insufficient permissions (Detect view health required).\n")
         return 1
     except urllib.error.URLError as e:
         sys.stderr.write(
-            f"Verbindungsfehler zu Brain '{args.brain}': {e.reason}\n"
-            "  → Hostname/IP prüfen und sicherstellen, dass der Brain erreichbar ist.\n"
+            f"Connection error to Brain '{args.brain}': {e.reason}\n"
+            "  → Check hostname/IP and ensure the Brain is reachable.\n"
         )
         return 1
     except TimeoutError:
-        sys.stderr.write(f"Timeout beim Verbindungsaufbau zu Brain '{args.brain}'.\n")
+        sys.stderr.write(f"Timeout after {args.timeout}s connecting to Brain '{args.brain}'.\n")
         return 1
     except Exception as e:
-        sys.stderr.write(f"Unerwarteter Fehler: {e}\n")
+        sys.stderr.write(f"Unexpected error: {e}\n")
         return 1
 
     if not sensors:
-        sys.stderr.write(f"Keine Sensoren in der API-Antwort von Brain '{args.brain}'.\n")
+        sys.stderr.write(f"No sensors found in API response from Brain '{args.brain}'.\n")
 
     print("<<<vectra_sensors:sep(0)>>>")
     print(json.dumps(sensors))

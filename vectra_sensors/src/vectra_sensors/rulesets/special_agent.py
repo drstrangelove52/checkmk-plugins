@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Checkmk 2.3 Rulesets API – Vectra Special Agent Konfigurationsformular
-Dieses rule_spec steuert den Eintrag in Setup → Agents → Other integrations.
+Checkmk 2.3 Rulesets API – Vectra Special Agent configuration form
+This rule_spec controls the entry under Setup → Agents → Other integrations.
 
-WICHTIG: Nur rule_spec_* hier – kein SpecialAgentConfig!
-Das SpecialAgentConfig ist in server_side_calls/special_agent.py.
+NOTE: Only rule_spec_* here – no SpecialAgentConfig!
+The SpecialAgentConfig is in server_side_calls/special_agent.py.
 """
 
 from cmk.rulesets.v1 import Help, Title
@@ -15,6 +15,7 @@ from cmk.rulesets.v1.form_specs import (
     DictElement,
     Dictionary,
     FieldSize,
+    Integer,
     Password,
     String,
 )
@@ -26,18 +27,17 @@ def _form_vectra_special_agent() -> Dictionary:
         title=Title("Vectra NDR – Sensor Health via Brain API"),
         help_text=Help(
             "Vectra Brain REST API (/api/v2.5/health/sensors). "
-            "API-Token: Brain UI → My Profile → API Token. "
-            "Berechtigung: Detect view health."
+            "API token: Brain UI → My Profile → API Token. "
+            "Required permission: Detect view health."
         ),
         elements={
             "brain_host": DictElement(
                 parameter_form=String(
                     title=Title("Brain Hostname / IP"),
                     help_text=Help(
-                        "Hostname oder IP-Adresse des Vectra Brain (ohne https://)"
+                        "Hostname or IP address of the Vectra Brain (without https://)"
                     ),
                     field_size=FieldSize.MEDIUM,
-                    prefill=DefaultValue("vectra-brain.example.com"),
                 ),
                 required=True,
             ),
@@ -45,18 +45,30 @@ def _form_vectra_special_agent() -> Dictionary:
                 parameter_form=Password(
                     title=Title("API Token"),
                     help_text=Help(
-                        "API-Token aus dem Brain UI "
+                        "API token from the Brain UI "
                         "(My Profile → View/Generate API Token)"
                     ),
                 ),
                 required=True,
             ),
+            "timeout": DictElement(
+                parameter_form=Integer(
+                    title=Title("Request timeout (seconds)"),
+                    help_text=Help(
+                        "Timeout for the Brain API request in seconds. "
+                        "Increase this value if the Brain is slow to respond. "
+                        "Default: 30 seconds."
+                    ),
+                    prefill=DefaultValue(30),
+                ),
+                required=False,
+            ),
             "no_verify_ssl": DictElement(
                 parameter_form=BooleanChoice(
-                    title=Title("SSL-Zertifikat nicht prüfen"),
+                    title=Title("Do not verify SSL certificate"),
                     help_text=Help(
-                        "Deaktiviert die SSL-Zertifikatsprüfung. "
-                        "Nur bei Self-Signed-Zertifikaten verwenden."
+                        "Disables SSL certificate verification. "
+                        "Use only with self-signed certificates."
                     ),
                     prefill=DefaultValue(False),
                 ),
