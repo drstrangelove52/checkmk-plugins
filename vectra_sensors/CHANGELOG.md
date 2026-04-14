@@ -4,13 +4,28 @@ All notable changes to this plugin are documented here.
 
 ---
 
+## [1.0.6] – 2026-04-14
+
+### Fixed
+- API token handling: `params["api_token"]` with `noop_parser` delivers a `Secret` object directly from Checkmk — not a plain string or tuple. Calling `str()` on it produced the config error `"Secret(id=..., format='%s', pass_safely=True)"`. The Secret object is now passed directly to `SpecialAgentCommand.command_arguments`, which resolves and masks it correctly at process launch.
+
+---
+
+## [1.0.5] – 2026-04-14
+
+### Fixed
+- Reverted manual `Secret()` wrapping introduced in v1.0.4 (incompatible with `noop_parser`).
+- `no_verify_ssl` WATO field: replaced `BooleanChoice` (caused duplicate checkbox) with `FixedValue(True)` and `required=False`.
+- `no_verify_ssl` WATO field: replaced `BooleanChoice` (caused duplicate checkbox) with `FixedValue(True)` and `required=False`. The outer DictElement checkbox now acts as the sole toggle.
+
+---
+
 ## [1.0.4] – 2026-04-14
 
 ### Fixed
 - Removed dead code in `get_sensors()`: the `resp.status != 200` branch was unreachable because `urllib` raises `HTTPError` for non-2xx responses before that check.
 
 ### Improved
-- **Security**: API token is now wrapped in `Secret` (cmk.server_side_calls.v1) so Checkmk masks it in process listings and the UI.
 - **Timeout**: Request timeout is now configurable via WATO (default: 30 s). The `--timeout` parameter is passed through to the special agent.
 - **Documentation**: `_STATUS_STATE` mapping in the check plugin now lists all confirmed Vectra sensor states with their rationale. Unknown states fall back to WARN.
 
