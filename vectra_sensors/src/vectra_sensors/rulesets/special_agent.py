@@ -10,11 +10,11 @@ The SpecialAgentConfig is in server_side_calls/special_agent.py.
 
 from cmk.rulesets.v1 import Help, Title
 from cmk.rulesets.v1.form_specs import (
-    BooleanChoice,
     DefaultValue,
     DictElement,
     Dictionary,
     FieldSize,
+    FixedValue,
     Integer,
     Password,
     String,
@@ -64,15 +64,15 @@ def _form_vectra_special_agent() -> Dictionary:
                 required=False,
             ),
             "no_verify_ssl": DictElement(
-                parameter_form=BooleanChoice(
+                parameter_form=FixedValue(
+                    value=True,
                     title=Title("Do not verify SSL certificate"),
                     help_text=Help(
                         "Disables SSL certificate verification. "
                         "Use only with self-signed certificates."
                     ),
-                    prefill=DefaultValue(False),
                 ),
-                required=True,
+                required=False,
             ),
         },
     )
