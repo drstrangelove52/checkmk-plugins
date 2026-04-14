@@ -1,0 +1,20 @@
+{
+  "author": "Martin Nigg",
+  "description": "Monitors Vectra NDR sensor health via the Vectra Brain REST API (/api/v2.5/health/sensors).",
+  "download_url": "",
+  "files": {
+    "cmk_addons_plugins": [
+      "vectra_sensors/agent_based/vectra_sensors.py",
+      "vectra_sensors/rulesets/check_parameters.py",
+      "vectra_sensors/rulesets/special_agent.py",
+      "vectra_sensors/server_side_calls/special_agent.py",
+      "vectra_sensors/libexec/agent_vectra_sensors"
+    ]
+  },
+  "name": "vectra_sensors",
+  "title": "Vectra NDR - Sensor Health Monitoring",
+  "version": "1.0.2",
+  "version.min_required": "2.3.0",
+  "version.packaged": "2.3.0",
+  "version.usable_until": null
+}

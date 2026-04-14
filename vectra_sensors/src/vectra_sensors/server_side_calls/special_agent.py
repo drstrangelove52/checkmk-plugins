@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Checkmk 2.3 Server-Side Calls – Vectra Special Agent
+"""
+
+from collections.abc import Iterator, Mapping
+
+from cmk.server_side_calls.v1 import (
+    HostConfig,
+    SpecialAgentCommand,
+    SpecialAgentConfig,
+    noop_parser,
+)
+
+
+def _extract_token(raw: object) -> str:
+    """Extrahiert den Token-String aus dem Password-Formspec-Wert.
+
+    Password-Felder liefern je nach Eingabe:
+      ("password", "klartext_token")   – direkte Eingabe
+      ("store",    "store_id")          – Password Store
+    Andere Formate werden direkt als String verwendet.
+    """
+    if isinstance(raw, (list, tuple)) and len(raw) == 2:
+        return str(raw[1])
+    return str(raw)
+
+
+def _generate_vectra_commands(
+    params: Mapping[str, object],
+    host_config: HostConfig,
+) -> Iterator[SpecialAgentCommand]:
+
+    brain_host    = str(params["brain_host"])
+    no_verify_ssl = bool(params.get("no_verify_ssl", False))
+    api_token     = _extract_token(params["api_token"])
+
+    args: list = [
+        "--brain", brain_host,
+        "--token", api_token,
+    ]
+
+    if no_verify_ssl:
+        args.append("--no-verify-ssl")
+
+    yield SpecialAgentCommand(command_arguments=args)
+
+
+special_agent_vectra_sensors = SpecialAgentConfig(
+    name="vectra_sensors",
+    parameter_parser=noop_parser,
+    commands_function=_generate_vectra_commands,
+)

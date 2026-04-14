@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Temporäre Dateien
+*.tmp
+*.bak
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Build-Artefakte (MKP-Dateien werden bewusst eingecheckt)
+cmk_addons_plugins.tar
+
+# Setup-Skript nicht einchecken
+github_setup.ps1
