@@ -28,14 +28,14 @@ def _generate_vectra_commands(
     no_verify_ssl = bool(params.get("no_verify_ssl", False))
     timeout       = int(params.get("timeout", 30))
 
-    # api_token is a Secret object provided by Checkmk via the Password form spec.
-    # Passing it directly to command_arguments lets Checkmk handle resolution
-    # and masking – do not call str() on it.
     args: list = [
         "--brain",   brain_host,
         "--token",   params["api_token"],
         "--timeout", str(timeout),
     ]
+
+    if "brain_port" in params:
+        args += ["--port", str(params["brain_port"])]
 
     if no_verify_ssl:
         args.append("--no-verify-ssl")

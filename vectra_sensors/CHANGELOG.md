@@ -4,6 +4,62 @@ All notable changes to this plugin are documented here.
 
 ---
 
+## [1.0.13] – 2026-04-15
+
+### Changed
+- Summary line now shows only `Paired | Last seen X ago` — IP and Version moved to details only.
+- Removed redundant "Heartbeat age" label from `check_levels` output (same value as "Last seen"). Metric is still recorded.
+
+---
+
+## [1.0.12] – 2026-04-15
+
+### Removed
+- "Use HTTP instead of HTTPS" WATO option and `--http` agent flag — no longer needed.
+- Configurable API path — hardcoded to `/api/v3.4/health` (Vectra Cloud Brain).
+
+---
+
+## [1.0.11] – 2026-04-15
+
+### Fixed
+- `check_levels()`: `levels_upper` must be passed as `("fixed", (warn, crit))` in `cmk.agent_based.v2` — plain tuples are not accepted and caused a `TypeError`.
+
+---
+
+## [1.0.10] – 2026-04-15
+
+### Changed
+- API path is now configurable via WATO ("API path" field). Default changed from `/api/v2.5/health/sensors` to `/api/v3.4/health` to match current Vectra Brain API versions. Older deployments can override the path manually.
+
+---
+
+## [1.0.9] – 2026-04-14
+
+### Fixed
+- Removed `notice_only=True` from `check_levels()` call — parameter does not exist in Checkmk 2.3's `cmk.agent_based.v2` API and caused a crash report on every check execution.
+
+---
+
+## [1.0.8] – 2026-04-14
+
+### Added
+- New WATO option "Use HTTP instead of HTTPS" (`--http` flag) for testing against non-TLS endpoints.
+
+### Fixed
+- `last_seen` parser now handles JavaScript `Date.toString()` format (e.g. `"Tue Apr 14 2026 21:35:35 GMT+0200 (...)"`) in addition to ISO 8601.
+- `version` field: added fallback from `package_version` → `version` to handle API response variants.
+
+---
+
+## [1.0.7] – 2026-04-14
+
+### Added
+- Optional `Brain Port` field in WATO. If set, the API URL becomes `https://<host>:<port>/api/v2.5/health/sensors`. Defaults to 443 when omitted.
+- New `--port` parameter in the special agent.
+
+---
+
 ## [1.0.6] – 2026-04-14
 
 ### Fixed

@@ -6,7 +6,7 @@ Fetches sensor health data from the Vectra Brain REST API
 and writes it as a Checkmk agent section to stdout.
 
 Usage by Checkmk:
-  agent_vectra_sensors --brain <host> --token <token> [--timeout <sec>] [--no-verify-ssl]
+  agent_vectra_sensors --brain <host> --token <token> [--port <port>] [--timeout <sec>] [--no-verify-ssl]
 """
 
 import sys
@@ -17,8 +17,16 @@ import urllib.error
 import ssl
 
 
-def get_sensors(brain_host: str, api_token: str, verify_ssl: bool = True, timeout: int = 30) -> list[dict]:
-    url = f"https://{brain_host}/api/v2.5/health/sensors"
+def get_sensors(
+    brain_host: str,
+    api_token: str,
+    verify_ssl: bool = True,
+    timeout: int = 30,
+    port: int | None = None,
+) -> list[dict]:
+    host_part = f"{brain_host}:{port}" if port else brain_host
+    url       = f"https://{host_part}/api/v3.4/health"
+
     req = urllib.request.Request(
         url,
         headers={
@@ -26,6 +34,7 @@ def get_sensors(brain_host: str, api_token: str, verify_ssl: bool = True, timeou
             "Accept": "application/json",
         },
     )
+
     ctx = ssl.create_default_context()
     if not verify_ssl:
         ctx.check_hostname = False
@@ -42,10 +51,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Vectra Special Agent – Sensor Health via Brain API",
     )
-    parser.add_argument("--brain",         required=True,  metavar="HOST",    help="Brain hostname or IP")
-    parser.add_argument("--token",         required=True,  metavar="TOKEN",   help="API token")
-    parser.add_argument("--timeout",       type=int, default=30, metavar="SEC", help="Request timeout in seconds (default: 30)")
-    parser.add_argument("--no-verify-ssl", action="store_true",                help="Disable SSL certificate verification")
+    parser.add_argument("--brain",         required=True,  metavar="HOST",  help="Brain hostname or IP")
+    parser.add_argument("--token",         required=True,  metavar="TOKEN", help="API token")
+    parser.add_argument("--port",          type=int, default=None, metavar="PORT", help="Brain API port (default: 443)")
+    parser.add_argument("--timeout",       type=int, default=30,  metavar="SEC",  help="Request timeout in seconds (default: 30)")
+    parser.add_argument("--no-verify-ssl", action="store_true",                   help="Disable SSL certificate verification")
     args = parser.parse_args()
 
     try:
@@ -54,6 +64,7 @@ def main() -> int:
             api_token=args.token,
             verify_ssl=not args.no_verify_ssl,
             timeout=args.timeout,
+            port=args.port,
         )
     except urllib.error.HTTPError as e:
         sys.stderr.write(

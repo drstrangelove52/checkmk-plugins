@@ -13,7 +13,7 @@
   },
   "name": "vectra_sensors",
   "title": "Vectra NDR - Sensor Health Monitoring",
-  "version": "1.0.6",
+  "version": "1.0.13",
   "version.min_required": "2.3.0",
   "version.packaged": "2.3.0",
   "version.usable_until": null

@@ -11,6 +11,7 @@ as Vectra sensors are hardened and do not run a Checkmk agent.
 from collections.abc import Mapping
 from datetime import datetime, timezone
 import json
+import re
 from typing import Any
 
 from cmk.agent_based.v2 import (
@@ -82,11 +83,23 @@ agent_section_vectra_sensors = AgentSection(
 # ──────────────────────────────────────────────────────────────
 
 def _last_seen_age_seconds(last_seen: str) -> float | None:
+    # Try ISO 8601 first (production API)
     try:
         dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
         return (datetime.now(timezone.utc) - dt).total_seconds()
     except (ValueError, TypeError):
-        return None
+        pass
+
+    # Fallback: JavaScript Date.toString() format
+    # e.g. "Tue Apr 14 2026 21:35:35 GMT+0200 (Mitteleuropäische Sommerzeit)"
+    try:
+        cleaned = re.sub(r"\s*\([^)]*\)", "", last_seen).strip()
+        dt = datetime.strptime(cleaned, "%a %b %d %Y %H:%M:%S GMT%z")
+        return (datetime.now(timezone.utc) - dt).total_seconds()
+    except (ValueError, TypeError):
+        pass
+
+    return None
 
 
 def _format_age(seconds: float) -> str:
@@ -137,7 +150,7 @@ def check_vectra_sensors(
     status    = sensor.get("status", "unknown").lower()
     last_seen = sensor.get("last_seen", "")
     serial    = sensor.get("serial_number", "n/a")
-    version   = sensor.get("package_version", "n/a")
+    version   = sensor.get("package_version") or sensor.get("version", "n/a")
     ip        = sensor.get("ip_address", "n/a")
     location  = sensor.get("location") or "–"
     luid      = sensor.get("luid", "n/a")
@@ -186,10 +199,7 @@ def check_vectra_sensors(
 
     yield Result(
         state=hb_state,
-        summary=(
-            f"Paired | Last seen {age_str} ago | "
-            f"IP: {ip} | Version: {version}"
-        ),
+        summary=f"Paired | Last seen {age_str} ago",
         details=(
             f"  Status:    {status}\n"
             f"  Last seen: {last_seen} ({age_str} ago)\n"
@@ -204,10 +214,8 @@ def check_vectra_sensors(
     yield from check_levels(
         age / 60,
         metric_name="vectra_sensor_last_seen_minutes",
-        levels_upper=(warn_age / 60, crit_age / 60),
-        label="Heartbeat age",
+        levels_upper=("fixed", (warn_age / 60, crit_age / 60)),
         render_func=lambda v: f"{v:.1f} min",
-        notice_only=True,
     )
 
 

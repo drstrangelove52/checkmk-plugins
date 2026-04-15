@@ -26,7 +26,7 @@ def _form_vectra_special_agent() -> Dictionary:
     return Dictionary(
         title=Title("Vectra NDR – Sensor Health via Brain API"),
         help_text=Help(
-            "Vectra Brain REST API (/api/v2.5/health/sensors). "
+            "Vectra Brain REST API (/api/v3.4/health). "
             "API token: Brain UI → My Profile → API Token. "
             "Required permission: Detect view health."
         ),
@@ -40,6 +40,17 @@ def _form_vectra_special_agent() -> Dictionary:
                     field_size=FieldSize.MEDIUM,
                 ),
                 required=True,
+            ),
+            "brain_port": DictElement(
+                parameter_form=Integer(
+                    title=Title("Brain Port"),
+                    help_text=Help(
+                        "TCP port of the Vectra Brain API. "
+                        "Default: 443 (HTTPS)."
+                    ),
+                    prefill=DefaultValue(443),
+                ),
+                required=False,
             ),
             "api_token": DictElement(
                 parameter_form=Password(
