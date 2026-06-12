@@ -5,8 +5,13 @@ Vectra Special Agent  –  agent_vectra_sensors
 Fetches sensor health data from the Vectra Brain REST API
 and writes it as a Checkmk agent section to stdout.
 
+Authentication: OAuth 2.0 Client Credentials flow.
+  POST /oauth2/token  with Basic Auth (client_id:client_secret)
+  → Bearer token used for subsequent API calls.
+
 Usage by Checkmk:
-  agent_vectra_sensors --brain <host> --token <token> [--port <port>] [--timeout <sec>] [--no-verify-ssl]
+  agent_vectra_sensors --brain <host> --client-id <id> --client-secret <secret>
+                       [--port <port>] [--timeout <sec>] [--no-verify-ssl]
 """
 
 import sys
@@ -14,32 +19,74 @@ import json
 import argparse
 import urllib.request
 import urllib.error
+import urllib.parse
 import ssl
+import base64
 
 
-def get_sensors(
-    brain_host: str,
-    api_token: str,
-    verify_ssl: bool = True,
-    timeout: int = 30,
-    port: int | None = None,
-) -> list[dict]:
-    host_part = f"{brain_host}:{port}" if port else brain_host
-    url       = f"https://{host_part}/api/v3.4/health"
-
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Token {api_token}",
-            "Accept": "application/json",
-        },
-    )
-
+def _make_ssl_context(verify_ssl: bool) -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     if not verify_ssl:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
+
+def get_bearer_token(
+    brain_host: str,
+    client_id: str,
+    client_secret: str,
+    verify_ssl: bool = True,
+    timeout: int = 30,
+    port: int | None = None,
+) -> str:
+    """Fetch an OAuth2 Bearer token via Client Credentials flow."""
+    host_part = f"{brain_host}:{port}" if port and port != 443 else brain_host
+    token_url = f"https://{host_part}/oauth2/token"
+    credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    body        = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode()
+
+    req = urllib.request.Request(
+        token_url,
+        data=body,
+        headers={
+            "Authorization": f"Basic {credentials}",
+            "Content-Type":  "application/x-www-form-urlencoded",
+            "Accept":        "application/json",
+            "User-Agent":    "checkmk-vectra-agent/1.0",
+        },
+        method="POST",
+    )
+
+    ctx = _make_ssl_context(verify_ssl)
+    with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
+        token_data = json.loads(resp.read().decode("utf-8"))
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise ValueError(f"No access_token in OAuth2 response: {token_data}")
+    return access_token
+
+
+def get_sensors(
+    brain_host: str,
+    bearer_token: str,
+    verify_ssl: bool = True,
+    timeout: int = 30,
+    port: int | None = None,
+) -> list[dict]:
+    host_part = f"{brain_host}:{port}" if port and port != 443 else brain_host
+    url       = f"https://{host_part}/api/v3.4/health/"
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {bearer_token}",
+            "Accept":        "application/json",
+        },
+    )
+
+    ctx = _make_ssl_context(verify_ssl)
     with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
@@ -51,41 +98,77 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Vectra Special Agent – Sensor Health via Brain API",
     )
-    parser.add_argument("--brain",         required=True,  metavar="HOST",  help="Brain hostname or IP")
-    parser.add_argument("--token",         required=True,  metavar="TOKEN", help="API token")
+    parser.add_argument("--brain",         required=True,  metavar="HOST",   help="Brain hostname or IP")
+    parser.add_argument("--client-id",     required=True,  metavar="ID",     help="OAuth2 Client ID")
+    parser.add_argument("--client-secret", required=True,  metavar="SECRET", help="OAuth2 Client Secret")
     parser.add_argument("--port",          type=int, default=None, metavar="PORT", help="Brain API port (default: 443)")
     parser.add_argument("--timeout",       type=int, default=30,  metavar="SEC",  help="Request timeout in seconds (default: 30)")
     parser.add_argument("--no-verify-ssl", action="store_true",                   help="Disable SSL certificate verification")
     args = parser.parse_args()
 
+    verify_ssl = not args.no_verify_ssl
+
     try:
-        sensors = get_sensors(
+        bearer_token = get_bearer_token(
             brain_host=args.brain,
-            api_token=args.token,
-            verify_ssl=not args.no_verify_ssl,
+            client_id=args.client_id,
+            client_secret=args.client_secret,
+            verify_ssl=verify_ssl,
             timeout=args.timeout,
             port=args.port,
         )
     except urllib.error.HTTPError as e:
         sys.stderr.write(
-            f"HTTP error {e.code} fetching from Brain '{args.brain}': {e.reason}\n"
+            f"HTTP error {e.code} fetching OAuth2 token from Brain '{args.brain}': {e.reason}\n"
         )
         if e.code == 401:
-            sys.stderr.write("  → API token is invalid or expired.\n")
+            sys.stderr.write("  → Client ID or Client Secret is invalid.\n")
         elif e.code == 403:
-            sys.stderr.write("  → Insufficient permissions (Detect view health required).\n")
+            sys.stderr.write("  → Client lacks permission to request a token.\n")
         return 1
     except urllib.error.URLError as e:
         sys.stderr.write(
-            f"Connection error to Brain '{args.brain}': {e.reason}\n"
+            f"Connection error reaching Brain '{args.brain}': {e.reason}\n"
             "  → Check hostname/IP and ensure the Brain is reachable.\n"
         )
         return 1
     except TimeoutError:
         sys.stderr.write(f"Timeout after {args.timeout}s connecting to Brain '{args.brain}'.\n")
         return 1
+    except ValueError as e:
+        sys.stderr.write(f"OAuth2 error: {e}\n")
+        return 1
     except Exception as e:
-        sys.stderr.write(f"Unexpected error: {e}\n")
+        sys.stderr.write(f"Unexpected error during OAuth2 token fetch: {e}\n")
+        return 1
+
+    try:
+        sensors = get_sensors(
+            brain_host=args.brain,
+            bearer_token=bearer_token,
+            verify_ssl=verify_ssl,
+            timeout=args.timeout,
+            port=args.port,
+        )
+    except urllib.error.HTTPError as e:
+        sys.stderr.write(
+            f"HTTP error {e.code} fetching sensor data from Brain '{args.brain}': {e.reason}\n"
+        )
+        if e.code == 401:
+            sys.stderr.write("  → Bearer token rejected. Check client permissions.\n")
+        elif e.code == 403:
+            sys.stderr.write("  → Insufficient permissions (Detect view health required).\n")
+        return 1
+    except urllib.error.URLError as e:
+        sys.stderr.write(
+            f"Connection error fetching sensor data from Brain '{args.brain}': {e.reason}\n"
+        )
+        return 1
+    except TimeoutError:
+        sys.stderr.write(f"Timeout after {args.timeout}s fetching sensor data from Brain '{args.brain}'.\n")
+        return 1
+    except Exception as e:
+        sys.stderr.write(f"Unexpected error fetching sensor data: {e}\n")
         return 1
 
     if not sensors:

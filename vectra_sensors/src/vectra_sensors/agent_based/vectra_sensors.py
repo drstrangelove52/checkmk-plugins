@@ -19,11 +19,11 @@ from cmk.agent_based.v2 import (
     CheckPlugin,
     CheckResult,
     DiscoveryResult,
+    Metric,
     Result,
     Service,
     State,
     StringTable,
-    check_levels,
 )
 
 
@@ -152,8 +152,9 @@ def check_vectra_sensors(
     serial    = sensor.get("serial_number", "n/a")
     version   = sensor.get("package_version") or sensor.get("version", "n/a")
     ip        = sensor.get("ip_address", "n/a")
-    location  = sensor.get("location") or "–"
     luid      = sensor.get("luid", "n/a")
+
+    location = sensor.get("location") or "–"
 
     cmk_state = _sensor_check_state(status)
 
@@ -161,7 +162,7 @@ def check_vectra_sensors(
     if cmk_state != State.OK:
         yield Result(
             state=cmk_state,
-            summary=f"Status: {status.upper()} | IP: {ip} | S/N: {serial}",
+            summary=f"Status: {status.upper()} | Location: {location} | S/N: {serial}",
             details=(
                 f"  Status:    {status}\n"
                 f"  IP:        {ip}\n"
@@ -199,7 +200,7 @@ def check_vectra_sensors(
 
     yield Result(
         state=hb_state,
-        summary=f"Paired | Last seen {age_str} ago",
+        summary=f"Paired | Last seen {age_str} ago | Location: {location}",
         details=(
             f"  Status:    {status}\n"
             f"  Last seen: {last_seen} ({age_str} ago)\n"
@@ -211,11 +212,12 @@ def check_vectra_sensors(
         ),
     )
 
-    yield from check_levels(
-        age / 60,
-        metric_name="vectra_sensor_last_seen_minutes",
-        levels_upper=("fixed", (warn_age / 60, crit_age / 60)),
-        render_func=lambda v: f"{v:.1f} min",
+    # Metric only – no extra summary text (avoids duplicate time display)
+    yield Metric(
+        name="vectra_sensor_last_seen_minutes",
+        value=age / 60,
+        levels=(warn_age / 60, crit_age / 60),
+        boundaries=(0, None),
     )
 
 

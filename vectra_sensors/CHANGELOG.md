@@ -4,6 +4,32 @@ All notable changes to this plugin are documented here.
 
 ---
 
+## [1.0.16] – 2026-04-28
+
+### Fixed
+- Port 443 is no longer appended explicitly to the URL. Python's `urllib` sends `Host: hostname:443` when the port is explicit, which some servers reject with 404. Standard HTTPS port is now always implicit.
+- Removed `prefill=DefaultValue(443)` from the Brain Port WATO field to prevent the port from being sent unintentionally when the field is not needed.
+
+---
+
+## [1.0.15] – 2026-04-28
+
+### Changed
+- Authentication switched from static API token to **OAuth 2.0 Client Credentials** flow.
+  - The plugin now POSTs to `/oauth2/token` with Basic Auth (Client ID + Client Secret) to obtain a short-lived Bearer token before calling `/api/v3.4/health/`.
+  - Required for Vectra Cloud Brain (portal.vectra.ai) deployments.
+- WATO form: `API Token` field replaced by `OAuth2 Client ID` (plain text) and `OAuth2 Client Secret` (password).
+- Special agent: `--token` argument replaced by `--client-id` and `--client-secret`.
+
+---
+
+## [1.0.14] – 2026-04-15
+
+### Fixed
+- Added missing trailing slash to API URL: `/api/v3.4/health/`.
+
+---
+
 ## [1.0.13] – 2026-04-15
 
 ### Changed

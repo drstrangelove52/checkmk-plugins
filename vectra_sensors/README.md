@@ -4,7 +4,7 @@ Checkmk plugin that monitors the health of **Vectra NDR virtual sensors** via th
 
 ## Overview
 
-Vectra sensors are hardened virtual appliances — they do not run a Checkmk agent. All health data is fetched exclusively from the Vectra Brain REST API (`/api/v3.4/health`). The plugin creates one Checkmk service per sensor discovered on the Brain.
+Vectra sensors are hardened virtual appliances — they do not run a Checkmk agent. All health data is fetched exclusively from the Vectra Brain REST API (`/api/v3.4/health/`). The plugin creates one Checkmk service per sensor discovered on the Brain.
 
 ## Requirements
 

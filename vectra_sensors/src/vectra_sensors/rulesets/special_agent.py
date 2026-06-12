@@ -26,8 +26,9 @@ def _form_vectra_special_agent() -> Dictionary:
     return Dictionary(
         title=Title("Vectra NDR – Sensor Health via Brain API"),
         help_text=Help(
-            "Vectra Brain REST API (/api/v3.4/health). "
-            "API token: Brain UI → My Profile → API Token. "
+            "Connects to the Vectra Brain REST API (/api/v3.4/health/) "
+            "using OAuth 2.0 Client Credentials. "
+            "Create an API client in the Brain UI under My Profile → API Clients. "
             "Required permission: Detect view health."
         ),
         elements={
@@ -46,18 +47,26 @@ def _form_vectra_special_agent() -> Dictionary:
                     title=Title("Brain Port"),
                     help_text=Help(
                         "TCP port of the Vectra Brain API. "
-                        "Default: 443 (HTTPS)."
+                        "Leave empty to use the default port 443 (HTTPS)."
                     ),
-                    prefill=DefaultValue(443),
                 ),
                 required=False,
             ),
-            "api_token": DictElement(
-                parameter_form=Password(
-                    title=Title("API Token"),
+            "client_id": DictElement(
+                parameter_form=String(
+                    title=Title("OAuth2 Client ID"),
                     help_text=Help(
-                        "API token from the Brain UI "
-                        "(My Profile → View/Generate API Token)"
+                        "Client ID from the Brain UI (My Profile → API Clients)."
+                    ),
+                    field_size=FieldSize.MEDIUM,
+                ),
+                required=True,
+            ),
+            "client_secret": DictElement(
+                parameter_form=Password(
+                    title=Title("OAuth2 Client Secret"),
+                    help_text=Help(
+                        "Client Secret from the Brain UI (My Profile → API Clients)."
                     ),
                 ),
                 required=True,
@@ -66,7 +75,7 @@ def _form_vectra_special_agent() -> Dictionary:
                 parameter_form=Integer(
                     title=Title("Request timeout (seconds)"),
                     help_text=Help(
-                        "Timeout for the Brain API request in seconds. "
+                        "Timeout for Brain API requests in seconds. "
                         "Increase this value if the Brain is slow to respond. "
                         "Default: 30 seconds."
                     ),
