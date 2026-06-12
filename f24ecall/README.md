@@ -1,116 +1,116 @@
-# f24ecall — SMS Notification Plugin for Checkmk
+# f24ecall — SMS-Benachrichtigungs-Plugin für Checkmk
 
-Checkmk notification plugin that sends SMS alerts via the [F24 eCall](https://ecall-messaging.com) HTTPS API.
+Checkmk-Notification-Plugin zum Versand von SMS-Alarmen über die [F24 eCall](https://ecall-messaging.com) HTTPS-API.
 
-Based on [ecallch](https://github.com/HeinleinSupport/check_mk_extensions/tree/cmk2.4/notifications/ecallch) by Heinlein Support GmbH.
+Basiert auf [ecallch](https://github.com/HeinleinSupport/check_mk_extensions/tree/cmk2.4/notifications/ecallch) von Heinlein Support GmbH.
 
-## Requirements
+## Voraussetzungen
 
-- Checkmk 2.3.0 or later
-- F24 eCall account with the HTTP/HTTPS API unlocked (must be enabled by eCall support)
-- The contact's mobile number stored in the **Pager address** field in Checkmk
+- Checkmk 2.3.0 oder neuer
+- F24 eCall-Konto mit aktivierter HTTP/HTTPS-Schnittstelle (muss beim eCall-Support explizit freigeschaltet werden)
+- Mobilnummer des Kontakts im Feld **Pager-Adresse** in Checkmk hinterlegt
 
 ## Installation
 
-1. **Setup → Extension packages** — upload the `.mkp` file
-2. Activate the package
+1. **Setup → Extension packages** — MKP-Datei hochladen
+2. Paket aktivieren
 3. **Activate changes**
 
-## Configuration
+## Konfiguration
 
-### 1. Create notification parameters
+### 1. Notification-Parameter anlegen
 
 **Setup → Notifications → Notification parameters → f24ecall → Add parameter set**
 
-| Field | Description |
+| Feld | Beschreibung |
 |---|---|
-| **User Name** | Your eCall account username |
-| **Password** | Your eCall account password (stored masked) |
-| **SMS Message Template** | Optional custom message template (see below). If left empty, a sensible default is used. |
+| **User Name** | Benutzername des eCall-Kontos |
+| **Password** | Passwort des eCall-Kontos (wird maskiert gespeichert) |
+| **SMS Message Template** | Optionale Nachrichtenvorlage mit `$VARIABLE$`-Platzhaltern (siehe unten). Wird das Feld leer gelassen, wird ein sinnvoller Standard verwendet. |
 
-### 2. Create notification rule
+### 2. Notification-Regel anlegen
 
 **Setup → Notifications → Add rule**
 
-| Field | Value |
+| Feld | Wert |
 |---|---|
 | **Notification method** | f24ecall |
-| **Parameters** | Select the parameter set created above |
-| **Contacts** | Contact with a mobile number in the Pager address field |
+| **Parameters** | Zuvor angelegten Parameter-Set auswählen |
+| **Contacts** | Kontakt mit hinterlegter Mobilnummer im Feld Pager-Adresse |
 
-## SMS Message Templates
+## SMS-Nachrichtenvorlagen
 
-The **SMS Message Template** field supports `$VARIABLE$` placeholders from the Checkmk notification context. The message is truncated to 160 characters.
+Das Feld **SMS Message Template** unterstützt `$VARIABLE$`-Platzhalter aus dem Checkmk-Benachrichtigungskontext. Die Nachricht wird auf 160 Zeichen gekürzt.
 
-### General variables
+### Allgemeine Variablen
 
-| Variable | Description | Example |
+| Variable | Beschreibung | Beispiel |
 |---|---|---|
-| `$NOTIFICATIONTYPE$` | Type of notification | `PROBLEM`, `RECOVERY`, `ACKNOWLEDGEMENT`, `FLAPPINGSTART`, `FLAPPINGSTOP`, `DOWNTIMESTART`, `DOWNTIMEEND`, `CUSTOM` |
-| `$NOTIFICATIONCOMMENT$` | Comment (for ACK, Downtime, Custom) | |
-| `$CONTACTNAME$` | Checkmk username of the contact | |
-| `$LONGDATETIME$` | Date and time (long format) | `Mon Apr 27 15:30:00 2026` |
-| `$SHORTDATETIME$` | Date and time (short format) | `2026-04-27 15:30:00` |
-| `$WHAT$` | `HOST` or `SERVICE` | |
+| `$NOTIFICATIONTYPE$` | Art der Benachrichtigung | `PROBLEM`, `RECOVERY`, `ACKNOWLEDGEMENT`, `FLAPPINGSTART`, `FLAPPINGSTOP`, `DOWNTIMESTART`, `DOWNTIMEEND`, `CUSTOM` |
+| `$NOTIFICATIONCOMMENT$` | Kommentar (bei ACK, Downtime, Custom) | |
+| `$CONTACTNAME$` | Benutzername des Checkmk-Kontakts | |
+| `$LONGDATETIME$` | Datum und Uhrzeit (lang) | `Mon Apr 27 15:30:00 2026` |
+| `$SHORTDATETIME$` | Datum und Uhrzeit (kurz) | `2026-04-27 15:30:00` |
+| `$WHAT$` | `HOST` oder `SERVICE` | |
 
-### Host variables
+### Host-Variablen
 
-| Variable | Description | Example |
+| Variable | Beschreibung | Beispiel |
 |---|---|---|
 | `$HOSTNAME$` | Hostname | `srv-web-01` |
-| `$HOSTALIAS$` | Host alias | |
-| `$HOSTADDRESS$` | Host IP address | |
-| `$HOSTSTATE$` | Host state | `UP`, `DOWN`, `UNREACHABLE` |
-| `$HOSTOUTPUT$` | Host check plugin output | |
-| `$HOSTDOWNTIME$` | Number of active downtimes | |
+| `$HOSTALIAS$` | Alias des Hosts | |
+| `$HOSTADDRESS$` | IP-Adresse des Hosts | |
+| `$HOSTSTATE$` | Zustand des Hosts | `UP`, `DOWN`, `UNREACHABLE` |
+| `$HOSTOUTPUT$` | Plugin-Ausgabe des Host-Checks | |
+| `$HOSTDOWNTIME$` | Anzahl aktiver Downtimes | |
 
-### Service variables
+### Service-Variablen
 
-| Variable | Description | Example |
+| Variable | Beschreibung | Beispiel |
 |---|---|---|
-| `$SERVICEDESC$` | Service name | `CPU load` |
-| `$SERVICESTATE$` | Service state | `OK`, `WARNING`, `CRITICAL`, `UNKNOWN` |
-| `$SERVICEOUTPUT$` | Plugin output including value and thresholds | `CRITICAL - Load 95% (warn/crit at 80%/90%)` |
-| `$SERVICEPERFDATA$` | Raw performance data | |
-| `$SERVICEDOWNTIME$` | Number of active downtimes | |
+| `$SERVICEDESC$` | Service-Name | `CPU load` |
+| `$SERVICESTATE$` | Zustand des Services | `OK`, `WARNING`, `CRITICAL`, `UNKNOWN` |
+| `$SERVICEOUTPUT$` | Plugin-Ausgabe inkl. Messwert und Schwellwerte | `CRITICAL - Load 95% (warn/crit at 80%/90%)` |
+| `$SERVICEPERFDATA$` | Performance-Daten (Rohdaten) | |
+| `$SERVICEDOWNTIME$` | Anzahl aktiver Downtimes | |
 
-### Acknowledgement variables
+### Acknowledgement-Variablen
 
-| Variable | Description |
+| Variable | Beschreibung |
 |---|---|
-| `$NOTIFICATIONAUTHOR$` | Who acknowledged |
-| `$NOTIFICATIONCOMMENT$` | Acknowledgement comment |
+| `$NOTIFICATIONAUTHOR$` | Wer die Meldung bestätigt hat |
+| `$NOTIFICATIONCOMMENT$` | Kommentar zur Bestätigung |
 
-## Example Templates
+## Beispiel-Vorlagen
 
-**Host (default):**
+**Host (Standard):**
 ```
 $NOTIFICATIONTYPE$: $HOSTNAME$ $HOSTSTATE$ $HOSTOUTPUT$
 ```
 → `PROBLEM: srv-web-01 DOWN PING timeout`
 
-**Service (default):**
+**Service (Standard):**
 ```
 $NOTIFICATIONTYPE$: $HOSTNAME$ $SERVICEDESC$ $SERVICESTATE$ $SERVICEOUTPUT$
 ```
 → `PROBLEM: srv-web-01 CPU load CRITICAL Load 95% (warn/crit at 80%/90%)`
 
-**Compact with timestamp:**
+**Kompakt mit Zeitstempel:**
 ```
 $SHORTDATETIME$ $NOTIFICATIONTYPE$ $HOSTNAME$ $SERVICESTATE$ $SERVICEDESC$
 ```
 
 **Acknowledgement:**
 ```
-ACK $HOSTNAME$ $SERVICEDESC$ by $NOTIFICATIONAUTHOR$: $NOTIFICATIONCOMMENT$
+ACK $HOSTNAME$ $SERVICEDESC$ von $NOTIFICATIONAUTHOR$: $NOTIFICATIONCOMMENT$
 ```
 
 ## Links
 
-- [F24 eCall HTTP/HTTPS API documentation](https://ecall-messaging.com/schnittstellen-und-dokumente/http-https/)
-- [Checkmk Notifications](https://docs.checkmk.com/latest/en/notifications.html)
-- [Checkmk notification context variables](https://docs.checkmk.com/latest/en/notifications.html#environment_variables)
+- [F24 eCall HTTP/HTTPS API-Dokumentation](https://ecall-messaging.com/schnittstellen-und-dokumente/http-https/)
+- [Checkmk Notifications](https://docs.checkmk.com/latest/de/notifications.html)
+- [Checkmk Benachrichtigungsvariablen](https://docs.checkmk.com/latest/de/notifications.html#environment_variables)
 
-## License
+## Lizenz
 
 GNU GPL v2
