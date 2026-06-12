@@ -1,0 +1,111 @@
+================================================================================
+  F24 eCall SMS Notification Plugin für Checkmk
+  Version 1.0.1 | Autor: Martin Nigg
+================================================================================
+
+VORAUSSETZUNGEN
+---------------
+- Checkmk ab Version 1.2.8
+- F24 eCall Konto mit aktivierter HTTP/HTTPS-Schnittstelle
+  (muss beim eCall-Support explizit freigeschaltet werden)
+- Pager-Adresse (Mobilnummer) beim Checkmk-Kontakt hinterlegt
+
+
+INSTALLATION
+------------
+1. Checkmk: Setup → Extension packages → MKP-Datei hochladen
+2. Paket aktivieren
+3. Änderungen aktivieren (Activate changes)
+
+
+KONFIGURATION
+-------------
+Setup → Notifications → Notification parameters → f24ecall → Create
+
+  User Name           Benutzername des eCall-Kontos
+  Password            Passwort des eCall-Kontos (maskiert)
+  SMS Template: Host  Nachrichtentext für Host-Benachrichtigungen
+  SMS Template: Srv.  Nachrichtentext für Service-Benachrichtigungen
+
+Die Templates unterstützen $VARIABLE$-Platzhalter (siehe Cheat-Sheet unten).
+Die SMS wird auf 160 Zeichen gekürzt.
+
+
+NOTIFICATION RULE
+-----------------
+Setup → Notifications → Add rule
+
+  Notification method:  f24ecall
+  Select parameters:    Zuvor erstellten Parameter-Set auswählen
+  Contacts:             Kontakt mit hinterlegter Pager-Nummer (Mobilnummer)
+
+
+================================================================================
+  CHEAT-SHEET: CHECKMK-VARIABLEN FÜR SMS-TEMPLATES
+================================================================================
+
+ALLGEMEIN
+---------
+  $NOTIFICATIONTYPE$      Art der Benachrichtigung:
+                          PROBLEM, RECOVERY, ACKNOWLEDGEMENT,
+                          FLAPPINGSTART, FLAPPINGSTOP,
+                          DOWNTIMESTART, DOWNTIMEEND, CUSTOM
+  $NOTIFICATIONCOMMENT$   Kommentar (bei ACK, Downtime, Custom)
+  $CONTACTNAME$           Benutzername des Kontakts
+  $LONGDATETIME$          Datum und Uhrzeit (lang)   z.B. Mon Apr 27 15:30:00 2026
+  $SHORTDATETIME$         Datum und Uhrzeit (kurz)   z.B. 2026-04-27 15:30:00
+  $WHAT$                  HOST oder SERVICE
+
+HOST
+----
+  $HOSTNAME$              Hostname                   z.B. srv-web-01
+  $HOSTALIAS$             Alias des Hosts
+  $HOSTADDRESS$           IP-Adresse des Hosts
+  $HOSTSTATE$             Zustand: UP, DOWN, UNREACHABLE
+  $HOSTOUTPUT$            Plugin-Ausgabe des Host-Checks
+  $HOSTDOWNTIME$          Anzahl aktiver Downtimes
+
+SERVICE
+-------
+  $SERVICEDESC$           Service-Name               z.B. CPU load
+  $SERVICESTATE$          Zustand: OK, WARNING, CRITICAL, UNKNOWN
+  $SERVICEOUTPUT$         Plugin-Ausgabe inkl. Messwert und Schwellwerte
+                          z.B. "CRITICAL - Load 95% (warn/crit at 80%/90%)"
+  $SERVICEPERFDATA$       Performance-Daten (Rohdaten)
+  $SERVICEDOWNTIME$       Anzahl aktiver Downtimes
+
+ACKNOWLEDGEMENT
+---------------
+  $NOTIFICATIONAUTHOR$    Wer hat bestätigt
+  $NOTIFICATIONCOMMENT$   Kommentar zur Bestätigung
+
+
+================================================================================
+  BEISPIEL-TEMPLATES
+================================================================================
+
+Host (Standard):
+  $NOTIFICATIONTYPE$: $HOSTNAME$ $HOSTSTATE$ $HOSTOUTPUT$
+
+  Beispiel-SMS: "PROBLEM: srv-web-01 DOWN PING timeout"
+
+Service (Standard):
+  $NOTIFICATIONTYPE$: $HOSTNAME$ $SERVICEDESC$ $SERVICESTATE$ $SERVICEOUTPUT$
+
+  Beispiel-SMS: "PROBLEM: srv-web-01 CPU load CRITICAL Load 95% (warn/crit at 80%/90%)"
+
+Kompakt mit Datum:
+  $SHORTDATETIME$ $NOTIFICATIONTYPE$ $HOSTNAME$ $SERVICESTATE$ $SERVICEDESC$
+
+Acknowledgement:
+  ACK $HOSTNAME$ $SERVICEDESC$ von $NOTIFICATIONAUTHOR$: $NOTIFICATIONCOMMENT$
+
+
+================================================================================
+  LINKS
+================================================================================
+  eCall HTTP/HTTPS API:   https://ecall-messaging.com/schnittstellen-und-dokumente/http-https/
+  Checkmk Notifications:  https://docs.checkmk.com/latest/en/notifications.html
+  Checkmk Variablen:      https://docs.checkmk.com/latest/en/notifications.html#environment_variables
+
+================================================================================

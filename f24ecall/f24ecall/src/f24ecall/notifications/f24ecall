@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# SMS notification plugin for F24 eCall HTTPS API
+# Based on ecallch by Heinlein Support GmbH <r.sander@heinlein-support.de>
+# This is free software; redistribute and/or modify under GNU GPL v2.
+
+import os
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+import requests
+
+API_URL = "https://url.ecall.ch/api/sms"
+
+
+def main():
+    context = {
+        var[7:]: value
+        for var, value in os.environ.items()
+        if var.startswith("NOTIFY_")
+    }
+
+    if not context.get("CONTACTPAGER"):
+        sys.stderr.write("Contact's pager address is empty, not sending anything.\n")
+        return 0
+
+    username = context["PARAMETER_USERNAME"]
+    sys.stderr.write("DEBUG username: %s\n" % username)
+    password = _get_password(context)
+    text = get_text(context)
+
+    return send_sms(username, password, text, context)
+
+
+def _get_password(context):
+    # Checkmk 2.4 new API serializes Password as a tuple:
+    # _1=cmk_postprocessed, _2=explicit_password|stored_password, _3_1=actual_value
+    pw_type = context.get("PARAMETER_PASSWORD_2", "unknown")
+    sys.stderr.write("DEBUG password type: %s\n" % pw_type)
+    for key in ("PARAMETER_PASSWORD", "PARAMETER_PASSWORD_3", "PARAMETER_PASSWORD_3_1"):
+        if key in context:
+            val = context[key]
+            masked = val[:3] + "*" * (len(val) - 6) + val[-3:] if len(val) > 6 else "***"
+            sys.stderr.write("DEBUG %s (%d): %s\n" % (key, len(val), masked))
+    if "PARAMETER_PASSWORD_3" in context:
+        return context["PARAMETER_PASSWORD_3"]
+    if "PARAMETER_PASSWORD_3_1" in context:
+        return context["PARAMETER_PASSWORD_3_1"]
+    return context["PARAMETER_PASSWORD"]
+
+
+def get_text(context):
+    template = context.get("PARAMETER_MESSAGE_TEMPLATE", "")
+    if template:
+        return expand_template(template, context)
+    return build_default_text(context)
+
+
+def expand_template(template, context):
+    def replace(match):
+        return context.get(match.group(1), "")
+
+    return re.sub(r"\$([A-Z0-9_]+)\$", replace, template)
+
+
+def build_default_text(context):
+    max_len = 160
+    message = context.get("HOSTNAME", "") + " "
+    notification_type = context.get("NOTIFICATIONTYPE", "")
+
+    if context.get("WHAT") == "SERVICE":
+        if notification_type in ("PROBLEM", "RECOVERY"):
+            message += context.get("SERVICESTATE", "")[:2] + " "
+            avail_len = max_len - len(message)
+            message += context.get("SERVICEDESC", "")[:avail_len] + " "
+            avail_len = max_len - len(message)
+            message += context.get("SERVICEOUTPUT", "")[:avail_len]
+        else:
+            message += context.get("SERVICEDESC", "")
+    else:
+        if notification_type in ("PROBLEM", "RECOVERY"):
+            message += "is " + context.get("HOSTSTATE", "")
+
+    if notification_type.startswith("FLAP"):
+        if "START" in notification_type:
+            message += " Started Flapping"
+        else:
+            message += " Stopped Flapping"
+    elif notification_type.startswith("DOWNTIME"):
+        what = notification_type[8:].title()
+        message += " Downtime " + what
+        message += " " + context.get("NOTIFICATIONCOMMENT", "")
+    elif notification_type == "ACKNOWLEDGEMENT":
+        message += " Acknowledged"
+        message += " " + context.get("NOTIFICATIONCOMMENT", "")
+    elif notification_type == "CUSTOM":
+        message += " Custom Notification"
+        message += " " + context.get("NOTIFICATIONCOMMENT", "")
+
+    return message[:max_len]
+
+
+def send_sms(username, password, text, context):
+    data = {
+        "UserName": username,
+        "Password": password,
+        "Address": context["CONTACTPAGER"].replace(" ", ""),
+        "Message": text,
+    }
+
+    resp = requests.post(API_URL, data=data)
+    sys.stderr.write("HTTP %d: %s\n" % (resp.status_code, resp.text[:500]))
+
+    try:
+        root = ET.fromstring(resp.text.encode("utf-8"))
+    except ET.ParseError:
+        root = ET.fromstring("<empty />")
+
+    response_data = {
+        "AdditionalInfo": None,
+        "ResultCode": None,
+        "ResultText": None,
+    }
+
+    ns = "{http://schemas.datacontract.org/2004/07/eCallHttp.Models}Result"
+    if root.tag == ns:
+        for child in root:
+            for key in response_data:
+                if child.tag.endswith(key):
+                    response_data[key] = child.text
+
+    if resp.status_code == 200 and response_data["ResultCode"] == "0":
+        sys.stdout.write("SMS successfully sent\n")
+        return 0
+
+    sys.stderr.write("%s\n" % response_data)
+    return 2
+
+
+sys.exit(main())
