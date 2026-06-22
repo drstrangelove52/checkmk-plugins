@@ -34,9 +34,12 @@ def main():
 
 
 def _get_password(context):
-    # Checkmk 2.4 serializes Password as a tuple:
-    # PARAMETER_PASSWORD_2 = explicit_password|stored_password
-    # PARAMETER_PASSWORD_3[_1] = actual value
+    # Checkmk 2.4 serializes Password as a nested tuple:
+    # ('cmk_postprocessed', 'explicit_password', ('uuid', 'actual_password'))
+    # PARAMETER_PASSWORD_3_1 = UUID (not the password!)
+    # PARAMETER_PASSWORD_3_2 = actual password
+    if "PARAMETER_PASSWORD_3_2" in context:
+        return context["PARAMETER_PASSWORD_3_2"]
     if "PARAMETER_PASSWORD_3_1" in context:
         return context["PARAMETER_PASSWORD_3_1"]
     if "PARAMETER_PASSWORD_3" in context:
