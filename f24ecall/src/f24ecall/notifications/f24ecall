@@ -27,7 +27,6 @@ def main():
         return 0
 
     username = context["PARAMETER_USERNAME"]
-    sys.stderr.write("DEBUG username: %s\n" % username)
     password = _get_password(context)
     text = get_text(context)
 
@@ -35,19 +34,13 @@ def main():
 
 
 def _get_password(context):
-    # Checkmk 2.4 new API serializes Password as a tuple:
-    # _1=cmk_postprocessed, _2=explicit_password|stored_password, _3_1=actual_value
-    pw_type = context.get("PARAMETER_PASSWORD_2", "unknown")
-    sys.stderr.write("DEBUG password type: %s\n" % pw_type)
-    for key in ("PARAMETER_PASSWORD", "PARAMETER_PASSWORD_3", "PARAMETER_PASSWORD_3_1"):
-        if key in context:
-            val = context[key]
-            masked = val[:3] + "*" * (len(val) - 6) + val[-3:] if len(val) > 6 else "***"
-            sys.stderr.write("DEBUG %s (%d): %s\n" % (key, len(val), masked))
-    if "PARAMETER_PASSWORD_3" in context:
-        return context["PARAMETER_PASSWORD_3"]
+    # Checkmk 2.4 serializes Password as a tuple:
+    # PARAMETER_PASSWORD_2 = explicit_password|stored_password
+    # PARAMETER_PASSWORD_3[_1] = actual value
     if "PARAMETER_PASSWORD_3_1" in context:
         return context["PARAMETER_PASSWORD_3_1"]
+    if "PARAMETER_PASSWORD_3" in context:
+        return context["PARAMETER_PASSWORD_3"]
     return context["PARAMETER_PASSWORD"]
 
 
@@ -110,7 +103,7 @@ def send_sms(username, password, text, context):
         "Message": text,
     }
 
-    resp = requests.post(API_URL, data=data)
+    resp = requests.post(API_URL, data=data, timeout=30)
     sys.stderr.write("HTTP %d: %s\n" % (resp.status_code, resp.text[:500]))
 
     try:
@@ -139,4 +132,5 @@ def send_sms(username, password, text, context):
     return 2
 
 
-sys.exit(main())
+if __name__ == "__main__":
+    sys.exit(main())

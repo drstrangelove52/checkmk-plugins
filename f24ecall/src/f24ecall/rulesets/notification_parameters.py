@@ -10,7 +10,7 @@ from cmk.rulesets.v1.form_specs import (
     Password,
     String,
 )
-from cmk.rulesets.v1.rule_specs import NotificationParameters, Topic
+from cmk.rulesets.v1.rule_specs import NotificationParameters
 
 
 def _form_f24ecall() -> Dictionary:
@@ -65,6 +65,5 @@ def _form_f24ecall() -> Dictionary:
 rule_spec_f24ecall = NotificationParameters(
     name="f24ecall",
     title=Title("F24 eCall SMS"),
-    topic=Topic.NOTIFICATIONS,
     parameter_form=_form_f24ecall,
 )
