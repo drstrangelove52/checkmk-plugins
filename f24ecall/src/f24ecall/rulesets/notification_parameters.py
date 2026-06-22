@@ -38,21 +38,35 @@ def _form_f24ecall() -> Dictionary:
                 ),
                 required=True,
             ),
-            "message_template": DictElement(
+            "host_message_template": DictElement(
                 parameter_form=String(
-                    title=Title("SMS Message Template"),
+                    title=Title("Host SMS Template"),
                     help_text=Help(
-                        "Template for the SMS text (max. 160 characters). "
-                        "Use $VARIABLE$ placeholders for Checkmk notification context variables. "
-                        "Available variables: "
-                        "HOSTNAME, HOSTSTATE, HOSTOUTPUT, "
-                        "SERVICEDESC, SERVICESTATE, SERVICEOUTPUT, "
-                        "NOTIFICATIONTYPE, NOTIFICATIONCOMMENT, "
-                        "CONTACTNAME, LONGDATETIME, SHORTDATETIME, WHAT."
+                        "Template for host notifications (max. 160 characters). "
+                        "Use $VARIABLE$ placeholders. "
+                        "Available: NOTIFICATIONTYPE, HOSTNAME, HOSTALIAS, HOSTADDRESS, "
+                        "HOSTSTATE, HOSTOUTPUT, NOTIFICATIONCOMMENT, SHORTDATETIME."
                     ),
                     prefill=DefaultValue(
-                        "$NOTIFICATIONTYPE$: $HOSTNAME$ $SERVICESTATE$$HOSTSTATE$"
-                        " $SERVICEDESC$ $SERVICEOUTPUT$$HOSTOUTPUT$"
+                        "$NOTIFICATIONTYPE$: $HOSTNAME$ $HOSTSTATE$ $HOSTOUTPUT$"
+                    ),
+                    field_size=FieldSize.LARGE,
+                ),
+                required=False,
+            ),
+            "service_message_template": DictElement(
+                parameter_form=String(
+                    title=Title("Service SMS Template"),
+                    help_text=Help(
+                        "Template for service notifications (max. 160 characters). "
+                        "Use $VARIABLE$ placeholders. "
+                        "Available: NOTIFICATIONTYPE, HOSTNAME, HOSTALIAS, "
+                        "SERVICEDESC, SERVICESTATE, SERVICEOUTPUT, "
+                        "NOTIFICATIONCOMMENT, SHORTDATETIME, CONTACTNAME."
+                    ),
+                    prefill=DefaultValue(
+                        "$NOTIFICATIONTYPE$: $HOSTNAME$ $SERVICESTATE$"
+                        " $SERVICEDESC$ $SERVICEOUTPUT$"
                     ),
                     field_size=FieldSize.LARGE,
                 ),

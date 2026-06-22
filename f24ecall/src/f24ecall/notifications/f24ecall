@@ -72,7 +72,12 @@ def _read_from_password_store(store_id):
 
 
 def get_text(context):
-    template = context.get("PARAMETER_MESSAGE_TEMPLATE", "")
+    what = context.get("WHAT", "HOST")
+    if what == "SERVICE":
+        template = context.get("PARAMETER_SERVICE_MESSAGE_TEMPLATE", "")
+    else:
+        template = context.get("PARAMETER_HOST_MESSAGE_TEMPLATE", "")
+
     if template:
         return expand_template(template, context)
     return build_default_text(context)
