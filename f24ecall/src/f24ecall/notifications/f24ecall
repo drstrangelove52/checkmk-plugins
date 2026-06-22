@@ -10,6 +10,9 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
+import os
+from pathlib import Path
+
 import requests
 
 API_URL = "https://url.ecall.ch/api/sms"
@@ -35,16 +38,32 @@ def main():
 
 def _get_password(context):
     # Checkmk 2.4 serializes Password as a nested tuple:
-    # ('cmk_postprocessed', 'explicit_password', ('uuid', 'actual_password'))
-    # PARAMETER_PASSWORD_3_1 = UUID (not the password!)
-    # PARAMETER_PASSWORD_3_2 = actual password
-    if "PARAMETER_PASSWORD_3_2" in context:
+    # explicit_password: ('cmk_postprocessed', 'explicit_password', ('uuid', 'actual_password'))
+    #   → PARAMETER_PASSWORD_3_2 = actual password
+    # stored_password: ('cmk_postprocessed', 'stored_password', ('store_id', ''))
+    #   → Checkmk does NOT resolve stored passwords; must read from password store
+    pw_type = context.get("PARAMETER_PASSWORD_2", "")
+
+    if pw_type == "stored_password":
+        store_id = context.get("PARAMETER_PASSWORD_3_1", "")
+        return _read_from_password_store(store_id)
+
+    if "PARAMETER_PASSWORD_3_2" in context and context["PARAMETER_PASSWORD_3_2"]:
         return context["PARAMETER_PASSWORD_3_2"]
-    if "PARAMETER_PASSWORD_3_1" in context:
-        return context["PARAMETER_PASSWORD_3_1"]
     if "PARAMETER_PASSWORD_3" in context:
         return context["PARAMETER_PASSWORD_3"]
-    return context["PARAMETER_PASSWORD"]
+    return context.get("PARAMETER_PASSWORD", "")
+
+
+def _read_from_password_store(store_id):
+    try:
+        import cmk.utils.password_store as pw
+        store_path = Path(os.environ["OMD_ROOT"]) / "var/check_mk/stored_passwords"
+        store = pw.load(store_path)
+        return store.get(store_id, "")
+    except Exception as e:
+        sys.stderr.write("Error reading password store '%s': %s\n" % (store_id, e))
+        return ""
 
 
 def get_text(context):
