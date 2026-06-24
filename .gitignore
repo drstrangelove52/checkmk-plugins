@@ -16,8 +16,17 @@ __pycache__/
 # Windows
 Thumbs.db
 
-# Build-Artefakte (MKP-Dateien werden bewusst eingecheckt)
+# Alte MKP-Build-Artefakte (nur jeweils aktuelle Version einchecken)
 cmk_addons_plugins.tar
+vsphere-snapshots/vsphere_snapshots-1.0.2.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.3.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.4.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.5.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.6.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.7.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.8.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.9.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.10.mkp
 
 # Setup-Skript nicht einchecken
 github_setup.ps1
