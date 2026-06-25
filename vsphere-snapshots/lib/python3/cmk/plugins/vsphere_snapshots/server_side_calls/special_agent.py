@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Server-Side-Calls: Übersetzt WATO-Parameter in CLI-Argumente für agent_vsphere_snapshots.
-"""
+"""Server-side calls: translate WATO parameters into CLI arguments for agent_vsphere_snapshots."""
 
 from collections.abc import Iterator
 
@@ -18,7 +16,7 @@ def _generate_vsphere_snapshots_commands(
 ) -> Iterator[SpecialAgentCommand]:
     assert isinstance(secret := params["password"], Secret)
     args: list = [
-        "--hostname", params["hostname"],
+        "--hostname", host_config.name,
         "--user", params["user"],
         "--password", secret.unsafe(),
         "--fallback-host", params["fallback_host"],

@@ -19,14 +19,6 @@ def _form_special_agent_vsphere_snapshots() -> Dictionary:
     return Dictionary(
         title=Title("VMware vSphere Snapshots"),
         elements={
-            "hostname": DictElement(
-                required=True,
-                parameter_form=String(
-                    title=Title("vCenter Hostname / IP"),
-                    help_text=Help("Hostname or IP address of the vCenter Server."),
-                    field_size=FieldSize.MEDIUM,
-                ),
-            ),
             "user": DictElement(
                 required=True,
                 parameter_form=String(
