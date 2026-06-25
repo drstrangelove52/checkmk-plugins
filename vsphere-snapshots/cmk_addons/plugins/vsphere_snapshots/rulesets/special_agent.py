@@ -11,6 +11,7 @@ from cmk.rulesets.v1.form_specs import (
     Integer,
     Password,
     String,
+    migrate_to_password,
 )
 from cmk.rulesets.v1.rule_specs import SpecialAgent, Topic
 
@@ -35,6 +36,7 @@ def _form_special_agent_vsphere_snapshots() -> Dictionary:
                         "Password for the vCenter user. "
                         "Recommended: store the password in the Checkmk password store."
                     ),
+                    migrate=migrate_to_password,
                 ),
             ),
             "port": DictElement(

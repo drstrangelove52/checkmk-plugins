@@ -8,6 +8,7 @@ from cmk.server_side_calls.v1 import (
     Secret,
     SpecialAgentCommand,
     SpecialAgentConfig,
+    noop_parser,
 )
 
 
@@ -33,6 +34,6 @@ def _generate_vsphere_snapshots_commands(
 
 special_agent_vsphere_snapshots = SpecialAgentConfig(
     name="vsphere_snapshots",
-    parameter_parser=lambda params: params,
+    parameter_parser=noop_parser,
     commands_function=_generate_vsphere_snapshots_commands,
 )
