@@ -1,20 +1,292 @@
 #!/usr/bin/env python3
-"""VMware vSphere snapshot special agent for Checkmk 2.4+."""
+"""VMware vSphere snapshot special agent — stdlib only, no pyVmomi required."""
 
 import argparse
-import atexit
 import json
+import re
 import ssl
 import sys
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
+from xml.etree import ElementTree as ET
 
-try:
-    from pyVim.connect import Disconnect, SmartConnect
-    from pyVmomi import vim
-except ImportError:
-    sys.stderr.write("Error: pyVmomi is not installed. Run: pip3 install pyVmomi\n")
-    sys.exit(1)
 
+# ---------------------------------------------------------------------------
+# XML helpers (namespace-agnostic)
+# ---------------------------------------------------------------------------
+
+def _local(tag: str) -> str:
+    return tag.split("}")[-1] if "}" in tag else tag
+
+
+def _children(el: ET.Element, local_tag: str) -> list:
+    return [c for c in el if _local(c.tag) == local_tag]
+
+
+def _child_text(el: ET.Element, local_tag: str) -> str:
+    for c in el:
+        if _local(c.tag) == local_tag:
+            return c.text or ""
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# SSL / HTTP
+# ---------------------------------------------------------------------------
+
+def _make_ssl_ctx(no_verify: bool) -> ssl.SSLContext:
+    if no_verify:
+        return ssl._create_unverified_context()
+    return ssl.create_default_context()
+
+
+# ---------------------------------------------------------------------------
+# vSphere SOAP client
+# ---------------------------------------------------------------------------
+
+class VsphereClient:
+    def __init__(self, host: str, port: int, no_ssl_verify: bool) -> None:
+        self.url = f"https://{host}:{port}/sdk"
+        self._ssl = _make_ssl_ctx(no_ssl_verify)
+        self._cookie = ""
+
+    def _call(self, body: str) -> ET.Element:
+        envelope = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<soapenv:Envelope'
+            ' xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
+            ' xmlns:vim25="urn:vim25"'
+            ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            "<soapenv:Body>" + body + "</soapenv:Body>"
+            "</soapenv:Envelope>"
+        )
+        headers = {
+            "Content-Type": "text/xml; charset=UTF-8",
+            "SOAPAction": '"urn:vim25/6.0"',
+        }
+        if self._cookie:
+            headers["Cookie"] = self._cookie
+
+        req = urllib.request.Request(
+            self.url, data=envelope.encode(), headers=headers, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, context=self._ssl, timeout=60) as resp:
+                cookie_hdr = resp.getheader("Set-Cookie", "")
+                m = re.search(r'vmware_soap_session="?([^";,\s]+)"?', cookie_hdr)
+                if m:
+                    self._cookie = f"vmware_soap_session={m.group(1)}"
+                return ET.fromstring(resp.read())
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(
+                f"SOAP HTTP {exc.code}: {exc.read().decode()[:400]}"
+            ) from exc
+
+    def _get_root_folder(self) -> str:
+        root = self._call(
+            "<vim25:RetrieveServiceContent>"
+            '<vim25:_this type="ServiceInstance">ServiceInstance</vim25:_this>'
+            "</vim25:RetrieveServiceContent>"
+        )
+        for el in root.iter():
+            if _local(el.tag) == "rootFolder":
+                return el.text or "group-d1"
+        return "group-d1"
+
+    def login(self, user: str, password: str) -> None:
+        def esc(s: str) -> str:
+            return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        self._call(
+            "<vim25:Login>"
+            '<vim25:_this type="SessionManager">SessionManager</vim25:_this>'
+            f"<vim25:userName>{esc(user)}</vim25:userName>"
+            f"<vim25:password>{esc(password)}</vim25:password>"
+            "</vim25:Login>"
+        )
+
+    def logout(self) -> None:
+        try:
+            self._call(
+                "<vim25:Logout>"
+                '<vim25:_this type="SessionManager">SessionManager</vim25:_this>'
+                "</vim25:Logout>"
+            )
+        except Exception:
+            pass
+
+    def get_vms_with_snapshots(self) -> list[dict]:
+        root_folder = self._get_root_folder()
+
+        body = f"""<vim25:RetrievePropertiesEx>
+  <vim25:_this type="PropertyCollector">propertyCollector</vim25:_this>
+  <vim25:specSet>
+    <vim25:propSet>
+      <vim25:type>VirtualMachine</vim25:type>
+      <vim25:pathSet>name</vim25:pathSet>
+      <vim25:pathSet>snapshot</vim25:pathSet>
+      <vim25:pathSet>guest.hostName</vim25:pathSet>
+    </vim25:propSet>
+    <vim25:objectSet>
+      <vim25:obj type="Folder">{root_folder}</vim25:obj>
+      <vim25:skip>false</vim25:skip>
+      <vim25:selectSet xsi:type="vim25:TraversalSpec">
+        <vim25:name>tsFolders</vim25:name>
+        <vim25:type>Folder</vim25:type>
+        <vim25:path>childEntity</vim25:path>
+        <vim25:skip>false</vim25:skip>
+        <vim25:selectSet><vim25:name>tsFolders</vim25:name></vim25:selectSet>
+        <vim25:selectSet><vim25:name>tsDcToVmf</vim25:name></vim25:selectSet>
+        <vim25:selectSet><vim25:name>tsCrToRp</vim25:name></vim25:selectSet>
+        <vim25:selectSet><vim25:name>tsRpToRp</vim25:name></vim25:selectSet>
+        <vim25:selectSet><vim25:name>tsRpToVm</vim25:name></vim25:selectSet>
+      </vim25:selectSet>
+      <vim25:selectSet xsi:type="vim25:TraversalSpec">
+        <vim25:name>tsDcToVmf</vim25:name>
+        <vim25:type>Datacenter</vim25:type>
+        <vim25:path>vmFolder</vim25:path>
+        <vim25:skip>false</vim25:skip>
+        <vim25:selectSet><vim25:name>tsFolders</vim25:name></vim25:selectSet>
+      </vim25:selectSet>
+      <vim25:selectSet xsi:type="vim25:TraversalSpec">
+        <vim25:name>tsCrToRp</vim25:name>
+        <vim25:type>ComputeResource</vim25:type>
+        <vim25:path>resourcePool</vim25:path>
+        <vim25:skip>false</vim25:skip>
+        <vim25:selectSet><vim25:name>tsRpToRp</vim25:name></vim25:selectSet>
+        <vim25:selectSet><vim25:name>tsRpToVm</vim25:name></vim25:selectSet>
+      </vim25:selectSet>
+      <vim25:selectSet xsi:type="vim25:TraversalSpec">
+        <vim25:name>tsRpToRp</vim25:name>
+        <vim25:type>ResourcePool</vim25:type>
+        <vim25:path>resourcePool</vim25:path>
+        <vim25:skip>false</vim25:skip>
+        <vim25:selectSet><vim25:name>tsRpToRp</vim25:name></vim25:selectSet>
+        <vim25:selectSet><vim25:name>tsRpToVm</vim25:name></vim25:selectSet>
+      </vim25:selectSet>
+      <vim25:selectSet xsi:type="vim25:TraversalSpec">
+        <vim25:name>tsRpToVm</vim25:name>
+        <vim25:type>ResourcePool</vim25:type>
+        <vim25:path>vm</vim25:path>
+        <vim25:skip>false</vim25:skip>
+      </vim25:selectSet>
+    </vim25:objectSet>
+  </vim25:specSet>
+  <vim25:options><vim25:maxObjects>1000</vim25:maxObjects></vim25:options>
+</vim25:RetrievePropertiesEx>"""
+
+        xml_root = self._call(body)
+        results = self._parse_retrieve_result(xml_root)
+
+        # Handle pagination token
+        token_el = next(
+            (el for el in xml_root.iter() if _local(el.tag) == "token"), None
+        )
+        while token_el is not None and token_el.text:
+            token = token_el.text
+            cont_body = (
+                "<vim25:ContinueRetrievePropertiesEx>"
+                '<vim25:_this type="PropertyCollector">propertyCollector</vim25:_this>'
+                f"<vim25:token>{token}</vim25:token>"
+                "</vim25:ContinueRetrievePropertiesEx>"
+            )
+            xml_root = self._call(cont_body)
+            results.extend(self._parse_retrieve_result(xml_root))
+            token_el = next(
+                (el for el in xml_root.iter() if _local(el.tag) == "token"), None
+            )
+
+        return results
+
+    def _parse_retrieve_result(self, xml_root: ET.Element) -> list[dict]:
+        results = []
+        for obj_content in xml_root.iter():
+            if _local(obj_content.tag) != "objects":
+                continue
+
+            vm_name = ""
+            guest_hostname = ""
+            snapshot_root_el = None
+
+            for prop_set in _children(obj_content, "propSet"):
+                pname = _child_text(prop_set, "name")
+                val_el = next((c for c in prop_set if _local(c.tag) == "val"), None)
+                if val_el is None:
+                    continue
+
+                if pname == "name":
+                    vm_name = val_el.text or ""
+                elif pname == "guest.hostName":
+                    guest_hostname = val_el.text or ""
+                elif pname == "snapshot":
+                    snapshot_root_el = val_el
+
+            if not vm_name or snapshot_root_el is None:
+                continue
+
+            snapshots = []
+            for snap_el in _children(snapshot_root_el, "rootSnapshotList"):
+                snapshots.extend(_parse_snapshot_tree(snap_el))
+
+            if snapshots:
+                results.append(
+                    {
+                        "vm_name": vm_name,
+                        "guest_hostname": guest_hostname or None,
+                        "snapshots": snapshots,
+                    }
+                )
+
+        return results
+
+
+# ---------------------------------------------------------------------------
+# Snapshot tree parsing
+# ---------------------------------------------------------------------------
+
+def _parse_snapshot_tree(el: ET.Element) -> list[dict]:
+    now = datetime.now(timezone.utc)
+    snapshots = []
+
+    name = _child_text(el, "name")
+    description = _child_text(el, "description")
+    create_time_str = _child_text(el, "createTime")
+
+    if create_time_str:
+        try:
+            create_time = datetime.fromisoformat(
+                create_time_str.replace("Z", "+00:00")
+            )
+            if create_time.tzinfo is None:
+                create_time = create_time.replace(tzinfo=timezone.utc)
+            age_days = (now - create_time).total_seconds() / 86400
+        except ValueError:
+            create_time = now
+            age_days = 0.0
+    else:
+        create_time = now
+        age_days = 0.0
+
+    snapshots.append(
+        {
+            "name": name,
+            "description": description,
+            "create_time": create_time.isoformat(),
+            "age_days": round(age_days, 2),
+            "size_bytes": 0,
+        }
+    )
+
+    for child_el in _children(el, "childSnapshotList"):
+        snapshots.extend(_parse_snapshot_tree(child_el))
+
+    return snapshots
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -23,115 +295,51 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hostname", required=True, help="vCenter hostname or IP")
     parser.add_argument("--user", required=True, help="vCenter username")
     parser.add_argument("--password", required=True, help="vCenter password")
-    parser.add_argument("--port", type=int, default=443, help="vCenter port (default: 443)")
+    parser.add_argument("--port", type=int, default=443, help="vCenter HTTPS port")
     parser.add_argument(
-        "--no-ssl-verify",
-        action="store_true",
-        help="Disable SSL certificate verification",
+        "--no-ssl-verify", action="store_true", help="Disable SSL certificate verification"
     )
     parser.add_argument(
         "--fallback-host",
         required=True,
-        help="Checkmk hostname for VMs without a dedicated Checkmk host",
+        help="Checkmk hostname for VMs without a dedicated host",
     )
     return parser.parse_args()
-
-
-def connect_vcenter(hostname: str, user: str, password: str, port: int, no_ssl: bool):
-    if no_ssl:
-        context = ssl._create_unverified_context()
-    else:
-        context = ssl.create_default_context()
-    return SmartConnect(host=hostname, user=user, pwd=password, port=port, sslContext=context)
-
-
-def get_all_vms(content) -> list:
-    view = content.viewManager.CreateContainerView(
-        content.rootFolder, [vim.VirtualMachine], True
-    )
-    vms = list(view.view)
-    view.Destroy()
-    return vms
-
-
-def build_snapshot_size_map(vm) -> dict:
-    size_map: dict = {}
-    if not hasattr(vm, "layoutEx") or vm.layoutEx is None:
-        return size_map
-    file_size_by_key = {f.key: f.size for f in (vm.layoutEx.file or [])}
-    for snap_layout in vm.layoutEx.snapshot or []:
-        mor_id = snap_layout.key._moId
-        size_map[mor_id] = file_size_by_key.get(snap_layout.dataKey, 0)
-    return size_map
-
-
-def collect_snapshots(snapshot_list, size_map: dict) -> list:
-    snapshots = []
-    now = datetime.now(timezone.utc)
-    for snap in snapshot_list:
-        create_time = snap.createTime
-        if create_time.tzinfo is None:
-            create_time = create_time.replace(tzinfo=timezone.utc)
-        age_days = (now - create_time).total_seconds() / 86400
-        mor_id = snap.snapshot._moId
-        snapshots.append(
-            {
-                "name": snap.name,
-                "description": snap.description or "",
-                "create_time": create_time.isoformat(),
-                "age_days": round(age_days, 2),
-                "size_bytes": size_map.get(mor_id, 0),
-            }
-        )
-        if snap.childSnapshotList:
-            snapshots.extend(collect_snapshots(snap.childSnapshotList, size_map))
-    return snapshots
-
-
-def guest_hostname(vm) -> str | None:
-    if vm.guest and vm.guest.hostName:
-        return vm.guest.hostName
-    return None
 
 
 def main() -> None:
     args = parse_args()
 
+    client = VsphereClient(args.hostname, args.port, args.no_ssl_verify)
     try:
-        si = connect_vcenter(
-            args.hostname, args.user, args.password, args.port, args.no_ssl_verify
-        )
+        client.login(args.user, args.password)
     except Exception as exc:
-        sys.stderr.write(f"Failed to connect to vCenter {args.hostname}: {exc}\n")
+        sys.stderr.write(f"Login failed for {args.hostname}: {exc}\n")
         sys.exit(1)
 
-    atexit.register(Disconnect, si)
-    content = si.RetrieveContent()
+    try:
+        vm_list = client.get_vms_with_snapshots()
+    except Exception as exc:
+        sys.stderr.write(f"Failed to retrieve VM data: {exc}\n")
+        sys.exit(1)
+    finally:
+        client.logout()
 
     vm_results = []
     fallback_results = []
-    for vm in get_all_vms(content):
-        if vm.snapshot is None:
-            continue
-        size_map = build_snapshot_size_map(vm)
-        snapshots = collect_snapshots(vm.snapshot.rootSnapshotList, size_map)
-        if not snapshots:
-            continue
-        pb_host = guest_hostname(vm)
-        vm_data = {"vm_name": vm.name, "snapshots": snapshots}
-        if pb_host:
-            vm_results.append({"piggyback_host": pb_host, **vm_data})
+    for vm in vm_list:
+        data = {"vm_name": vm["vm_name"], "snapshots": vm["snapshots"]}
+        if vm["guest_hostname"]:
+            vm_results.append({"piggyback_host": vm["guest_hostname"], **data})
         else:
-            fallback_results.append(vm_data)
+            fallback_results.append(data)
 
-    # Piggyback-Sektion pro VM (VMware Tools liefert FQDN)
     for vm_data in vm_results:
         print(f"<<<<{vm_data['piggyback_host']}>>>>")
         print("<<<vsphere_snapshots:sep(0)>>>")
         print(json.dumps({"vm_name": vm_data["vm_name"], "snapshots": vm_data["snapshots"]}))
         print("<<<<>>>>")
 
-    # Sammel-Host: nur VMs ohne VMware Tools / ohne Guest-Hostname
     if fallback_results:
         print(f"<<<<{args.fallback_host}>>>>")
         print("<<<vsphere_snapshots_all:sep(0)>>>")
@@ -141,4 +349,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
