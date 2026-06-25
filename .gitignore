@@ -28,6 +28,7 @@ vsphere-snapshots/vsphere_snapshots-1.0.8.mkp
 vsphere-snapshots/vsphere_snapshots-1.0.9.mkp
 vsphere-snapshots/vsphere_snapshots-1.0.10.mkp
 vsphere-snapshots/vsphere_snapshots-1.0.11.mkp
+vsphere-snapshots/vsphere_snapshots-1.0.12.mkp
 
 # Setup-Skript nicht einchecken
 github_setup.ps1
