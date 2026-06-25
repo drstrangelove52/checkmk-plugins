@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-WATO-Regel für den VMware vSphere Snapshot Special Agent.
-"""
+"""WATO rule for the VMware vSphere Snapshot Special Agent."""
 
 from cmk.rulesets.v1 import Help, Title
 from cmk.rulesets.v1.form_specs import (
@@ -25,53 +23,51 @@ def _form_special_agent_vsphere_snapshots() -> Dictionary:
                 required=True,
                 parameter_form=String(
                     title=Title("vCenter Hostname / IP"),
-                    help_text=Help("Hostname oder IP-Adresse des vCenter Servers."),
+                    help_text=Help("Hostname or IP address of the vCenter Server."),
                     field_size=FieldSize.MEDIUM,
                 ),
             ),
             "user": DictElement(
                 required=True,
                 parameter_form=String(
-                    title=Title("Benutzername"),
-                    help_text=Help("z.B. administrator@vsphere.local"),
+                    title=Title("Username"),
+                    help_text=Help("e.g. administrator@vsphere.local"),
                     field_size=FieldSize.MEDIUM,
                 ),
             ),
             "password": DictElement(
                 required=True,
                 parameter_form=Password(
-                    title=Title("Passwort"),
+                    title=Title("Password"),
                     help_text=Help(
-                        "Passwort für den vCenter-Benutzer. "
-                        "Empfehlung: Passwort im Checkmk Passwort-Speicher ablegen."
+                        "Password for the vCenter user. "
+                        "Recommended: store the password in the Checkmk password store."
                     ),
                 ),
             ),
             "port": DictElement(
                 parameter_form=Integer(
                     title=Title("Port"),
-                    help_text=Help("HTTPS-Port des vCenter (Standard: 443)."),
+                    help_text=Help("HTTPS port of the vCenter (default: 443)."),
                     prefill=DefaultValue(443),
                 ),
             ),
             "no_ssl_verify": DictElement(
                 required=True,
                 parameter_form=BooleanChoice(
-                    title=Title("SSL-Zertifikat nicht prüfen"),
+                    title=Title("Disable SSL certificate verification"),
                     help_text=Help(
-                        "SSL-Validierung deaktivieren. Nur für Testumgebungen empfohlen."
+                        "Skip SSL validation. Recommended for test environments only."
                     ),
-                    label=Title("Deaktivieren"),
                 ),
             ),
             "fallback_host": DictElement(
                 required=True,
                 parameter_form=String(
-                    title=Title("Sammel-Host"),
+                    title=Title("Fallback host"),
                     help_text=Help(
-                        "Checkmk-Hostname, unter dem VMs gelistet werden, "
-                        "die keinen eigenen Checkmk-Host haben. "
-                        "Dieser Host muss in Checkmk existieren."
+                        "Checkmk hostname for VMs that have no dedicated Checkmk host "
+                        "(e.g. VMs without VMware Tools). This host must exist in Checkmk."
                     ),
                     field_size=FieldSize.MEDIUM,
                 ),
@@ -86,10 +82,9 @@ rule_spec_special_agent_vsphere_snapshots = SpecialAgent(
     topic=Topic.CLOUD,
     parameter_form=_form_special_agent_vsphere_snapshots,
     help_text=Help(
-        "Verbindet sich per vSphere API (pyVmomi) mit einem vCenter und prüft "
-        "alle VMs auf Snapshots. Je VM wird ein Service erzeugt, der Alter, "
-        "Grösse und das Pflichtdatum in der Beschreibung überwacht. "
-        "Der Piggyback-Hostname wird aus dem VMware-Tools-Gasthostnamen (FQDN) bezogen. "
-        "VMs ohne VMware Tools werden dem Sammel-Host zugewiesen."
+        "Connects via vSphere API (pyVmomi) to a vCenter and checks all VMs for snapshots. "
+        "A service is created per VM monitoring age, size, and the required deletion date "
+        "in the snapshot description. The piggyback hostname is taken from the VMware Tools "
+        "guest hostname (FQDN). VMs without VMware Tools are assigned to the fallback host."
     ),
 )
